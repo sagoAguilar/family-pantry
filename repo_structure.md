@@ -51,6 +51,7 @@ app/
 ```
 
 **File Template: `app/(tabs)/inventory.tsx`**
+
 ```typescript
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList } from 'react-native';
@@ -77,17 +78,15 @@ lib/
 ```
 
 **File Template: `lib/supabase.ts`**
+
 ```typescript
-import { createClient } from '@supabase/supabase-js';
-import { Database } from './types';
+import { createClient } from "@supabase/supabase-js";
+import { Database } from "./types";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_KEY!;
 
-export const supabase = createClient<Database>(
-  supabaseUrl, 
-  supabaseAnonKey
-);
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 ```
 
 ### `/components` - Reusable Components
@@ -117,6 +116,7 @@ components/
 ```
 
 **File Template: `components/ui/Button.tsx`**
+
 ```typescript
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
@@ -129,8 +129,8 @@ interface ButtonProps {
 
 export function Button({ title, onPress, variant = 'primary' }: ButtonProps) {
   return (
-    <TouchableOpacity 
-      style={[styles.button, styles[variant]]} 
+    <TouchableOpacity
+      style={[styles.button, styles[variant]]}
       onPress={onPress}
     >
       <Text style={styles.text}>{title}</Text>
@@ -168,9 +168,10 @@ store/
 ```
 
 **File Template: `store/useAuthStore.ts`** (using Zustand)
+
 ```typescript
-import { create } from 'zustand';
-import { User } from '@supabase/supabase-js';
+import { create } from "zustand";
+import { User } from "@supabase/supabase-js";
 
 interface AuthState {
   user: User | null;
@@ -201,6 +202,7 @@ supabase/
 ```
 
 **File: `supabase/schema.sql`**
+
 ```sql
 -- See artifact "Supabase Database Schema"
 -- Complete schema with tables, indexes, RLS policies
@@ -239,6 +241,7 @@ __tests__/
 ```
 
 **File Template: `__tests__/components/Button.test.tsx`**
+
 ```typescript
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -266,6 +269,7 @@ describe('Button', () => {
 ## Configuration Files
 
 ### `.env.example`
+
 ```env
 # Copy to .env and fill in your values
 EXPO_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
@@ -273,19 +277,19 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJ...
 ```
 
 ### `babel.config.js`
+
 ```javascript
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: ['babel-preset-expo'],
-    plugins: [
-      'react-native-reanimated/plugin',
-    ],
+    presets: ["babel-preset-expo"],
+    plugins: ["react-native-reanimated/plugin"],
   };
 };
 ```
 
 ### `tsconfig.json`
+
 ```json
 {
   "extends": "expo/tsconfig.base",
@@ -296,16 +300,12 @@ module.exports = function (api) {
       "@/*": ["./*"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }
 ```
 
 ### `eas.json`
+
 ```json
 {
   "cli": {
@@ -330,6 +330,7 @@ module.exports = function (api) {
 ## Naming Conventions
 
 ### Files
+
 - **Components**: PascalCase (e.g., `InventoryCard.tsx`)
 - **Screens**: PascalCase with descriptor (e.g., `inventory.tsx`)
 - **Utilities**: camelCase (e.g., `formatDate.ts`)
@@ -337,12 +338,14 @@ module.exports = function (api) {
 - **Tests**: Same as source + `.test.tsx`
 
 ### Variables
+
 - **Components**: PascalCase (`const InventoryCard = ...`)
 - **Functions**: camelCase (`function fetchItems()`)
 - **Constants**: UPPER_SNAKE_CASE (`const MAX_ITEMS = 100`)
 - **Hooks**: camelCase with 'use' prefix (`useInventory`)
 
 ### Database
+
 - **Tables**: snake_case (`inventory_items`)
 - **Columns**: snake_case (`created_at`)
 - **Functions**: snake_case (`update_max_quantity`)
@@ -353,23 +356,23 @@ Standard import order in files:
 
 ```typescript
 // 1. React imports
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 // 2. React Native imports
-import { View, Text, FlatList } from 'react-native';
+import { View, Text, FlatList } from "react-native";
 
 // 3. Third-party libraries
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 
 // 4. Local imports (absolute)
-import { supabase } from '@/lib/supabase';
-import { InventoryItem } from '@/lib/types';
+import { supabase } from "@/lib/supabase";
+import { InventoryItem } from "@/lib/types";
 
 // 5. Local imports (relative)
-import { Button } from '../../components/ui/Button';
+import { Button } from "../../components/ui/Button";
 
 // 6. Styles
-import styles from './styles';
+import styles from "./styles";
 ```
 
 ## File Size Guidelines
@@ -399,14 +402,14 @@ Every major component/function should have:
 ```typescript
 /**
  * InventoryCard component displays a single inventory item
- * 
+ *
  * @param item - The inventory item to display
  * @param onEdit - Callback when edit button pressed
  * @param onDelete - Callback when delete button pressed
- * 
+ *
  * @example
- * <InventoryCard 
- *   item={item} 
+ * <InventoryCard
+ *   item={item}
  *   onEdit={() => handleEdit(item.id)}
  *   onDelete={() => handleDelete(item.id)}
  * />

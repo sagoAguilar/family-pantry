@@ -18,6 +18,7 @@ npm install -g expo-cli
 ```
 
 Verify installation:
+
 ```bash
 expo --version
 ```
@@ -54,12 +55,13 @@ expo --version
 
 1. In Supabase dashboard, click "SQL Editor"
 2. Click "New Query"
-3. Copy the entire contents from the artifact "Supabase Database Schema"
+3. Copy the entire contents from the artifact supabase/database_schema.sql
 4. Paste into SQL editor
 5. Click "Run" (or press Cmd/Ctrl + Enter)
 6. You should see "Success. No rows returned"
 
 Verify tables were created:
+
 1. Click "Database" → "Tables"
 2. You should see 7 tables: `families`, `users`, `inventory_items`, etc.
 
@@ -127,6 +129,7 @@ family-pantry/
 ```
 
 Copy code files from artifacts:
+
 1. `lib/supabase.ts` - Artifact "lib/supabase.ts - Supabase Client"
 2. `lib/types.ts` - Artifact "lib/types.ts - TypeScript Types"
 3. `app/(tabs)/inventory.tsx` - Artifact "app/(tabs)/inventory.tsx - Inventory Screen"
@@ -135,11 +138,13 @@ Copy code files from artifacts:
 ## Step 6: Install Expo Go on Your Phone
 
 ### iOS
+
 1. Open App Store
 2. Search "Expo Go"
 3. Install
 
 ### Android
+
 1. Open Google Play Store
 2. Search "Expo Go"
 3. Install
@@ -151,6 +156,7 @@ npx expo start
 ```
 
 You should see:
+
 ```
 › Metro waiting on exp://192.168.1.x:8081
 › Scan the QR code above with Expo Go (Android) or the Camera app (iOS)
@@ -159,11 +165,13 @@ You should see:
 ## Step 8: Open App on Phone
 
 ### iOS
+
 1. Open Camera app
 2. Point at QR code
 3. Tap notification to open in Expo Go
 
 ### Android
+
 1. Open Expo Go app
 2. Tap "Scan QR code"
 3. Point at QR code on terminal
@@ -191,15 +199,15 @@ After login, you need to link user to a family:
 
 ```sql
 -- Create family
-INSERT INTO families (name) 
-VALUES ('My Family') 
+INSERT INTO families (name)
+VALUES ('My Family')
 RETURNING id;
 
 -- Copy the returned ID, then run (replace both UUIDs):
 INSERT INTO users (id, family_id, name, role)
 VALUES (
   'YOUR_USER_ID_HERE',
-  'FAMILY_ID_FROM_ABOVE', 
+  'FAMILY_ID_FROM_ABOVE',
   'Your Name',
   'admin'
 );
@@ -248,25 +256,30 @@ VALUES (
 ## Troubleshooting
 
 ### "Network request failed"
+
 - Check `.env` file exists and has correct values
 - Verify Supabase project is active (not paused)
 - Try: `npx expo start --clear`
 
 ### "No family found"
+
 - Run Step 10 SQL queries
 - Verify user ID matches in Supabase Auth
 - Check `users` table has your record
 
 ### App won't load on phone
+
 - Ensure phone and computer on same WiFi
 - Try: `npx expo start --tunnel`
 - Disable VPN if running
 
 ### TypeScript errors
+
 - Run: `npx tsc --noEmit` to see all errors
 - Common fix: `rm -rf node_modules && npm install`
 
 ### "Supabase RLS policy violation"
+
 - Check user is authenticated (logged in)
 - Verify family_id is set in `users` table
 - RLS policies are in schema (Step 2.4)
@@ -278,6 +291,7 @@ VALUES (
 ✅ You're tracking inventory!
 
 Now you can:
+
 1. Customize the app (colors, features)
 2. Add more family members
 3. Deploy to app stores (see README.md)
@@ -286,20 +300,25 @@ Now you can:
 ## Development Tips
 
 ### Hot Reload
+
 Changes to code auto-reload on phone. Just save the file!
 
 ### Debug Menu
+
 Shake phone → "Debug Remote JS" (opens Chrome debugger)
 
 ### View Database
+
 Supabase → "Database" → "Tables" → Browse data
 
 ### Logs
+
 Terminal shows all console.log() output
 
 ## Support
 
 Need help?
+
 - 📖 Check [README.md](README.md)
 - 💬 Open [GitHub Issue](https://github.com/yourusername/family-pantry/issues)
 - 📧 Email: support@familypantry.app
