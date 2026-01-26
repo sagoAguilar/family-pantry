@@ -1,32 +1,13 @@
 import React from 'react';
 import {
-  Alert,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { useAuth } from '../../contexts/auth-context';
 
 export default function HomeScreen() {
-  const { user, familyId, signOut } = useAuth();
-
-  async function handleSignOut() {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-          },
-        },
-      ]
-    );
-  }
+  const { user } = useAuth();
 
   return (
     <View style={styles.container}>
@@ -53,12 +34,6 @@ export default function HomeScreen() {
           <Text style={styles.infoLabel}>Signed in as</Text>
           <Text style={styles.infoValue}>{user?.email}</Text>
         </View>
-      </View>
-
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -123,20 +98,5 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 14,
     color: '#1e40af',
-  },
-  footer: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  signOutButton: {
-    backgroundColor: '#fee2e2',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  signOutText: {
-    color: '#dc2626',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
