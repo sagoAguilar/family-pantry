@@ -9,7 +9,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../contexts/auth-context';
 
 function RootLayoutNav() {
-  const { session, loading, familyId } = useAuth();
+  const { session, loading, familyId, needsFamily } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -17,25 +17,25 @@ function RootLayoutNav() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const currentRoute = segments[1];
 
     if (!session) {
       // Not signed in, redirect to login
       if (!inAuthGroup) {
         router.replace('/(auth)/login');
       }
-    } else if (!familyId) {
-      // Signed in but no family, stay on auth to complete setup
-      // This handles edge case where user exists but isn't linked to family
-      if (!inAuthGroup) {
-        router.replace('/(auth)/login');
+    } else if (needsFamily) {
+      // Signed in but no family, redirect to complete profile
+      if (!inAuthGroup || currentRoute !== 'complete-profile') {
+        router.replace('/(auth)/complete-profile');
       }
-    } else {
+    } else if (familyId) {
       // Signed in with family, redirect to main app
       if (inAuthGroup) {
         router.replace('/(tabs)');
       }
     }
-  }, [session, loading, familyId, segments]);
+  }, [session, loading, familyId, needsFamily, segments]);
 
   if (loading) {
     return (

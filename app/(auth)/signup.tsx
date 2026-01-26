@@ -12,16 +12,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../../contexts/auth-context';
+import { isAppleAuthAvailable, useAuth } from '../../contexts/auth-context';
 
 export default function SignupScreen() {
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle, signInWithApple } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [userName, setUserName] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
 
   async function handleSignup() {
     if (!email || !password || !userName || !familyName) {
@@ -54,6 +55,28 @@ export default function SignupScreen() {
     }
   }
 
+  async function handleGoogleSignIn() {
+    setSocialLoading('google');
+    const { error } = await signInWithGoogle();
+    setSocialLoading(null);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+    }
+  }
+
+  async function handleAppleSignIn() {
+    setSocialLoading('apple');
+    const { error } = await signInWithApple();
+    setSocialLoading(null);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+    }
+  }
+
+  const isLoading = loading || socialLoading !== null;
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -69,6 +92,46 @@ export default function SignupScreen() {
             <Text style={styles.subtitle}>Start managing your family pantry</Text>
           </View>
 
+          <View style={styles.socialButtons}>
+            <TouchableOpacity
+              style={[styles.socialButton, isLoading && styles.buttonDisabled]}
+              onPress={handleGoogleSignIn}
+              disabled={isLoading}
+            >
+              {socialLoading === 'google' ? (
+                <ActivityIndicator color="#374151" />
+              ) : (
+                <>
+                  <Text style={styles.socialIcon}>G</Text>
+                  <Text style={styles.socialButtonText}>Continue with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {isAppleAuthAvailable() && (
+              <TouchableOpacity
+                style={[styles.socialButton, styles.appleButton, isLoading && styles.buttonDisabled]}
+                onPress={handleAppleSignIn}
+                disabled={isLoading}
+              >
+                {socialLoading === 'apple' ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.appleIcon}></Text>
+                    <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or sign up with email</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <View style={styles.form}>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Your Info</Text>
@@ -78,6 +141,7 @@ export default function SignupScreen() {
                 value={userName}
                 onChangeText={setUserName}
                 autoComplete="name"
+                editable={!isLoading}
               />
               <TextInput
                 style={styles.input}
@@ -87,6 +151,7 @@ export default function SignupScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
+                editable={!isLoading}
               />
             </View>
 
@@ -97,6 +162,7 @@ export default function SignupScreen() {
                 placeholder="Family Name (e.g., The Smiths)"
                 value={familyName}
                 onChangeText={setFamilyName}
+                editable={!isLoading}
               />
             </View>
 
@@ -109,6 +175,7 @@ export default function SignupScreen() {
                 onChangeText={setPassword}
                 secureTextEntry
                 autoComplete="new-password"
+                editable={!isLoading}
               />
               <TextInput
                 style={styles.input}
@@ -117,13 +184,14 @@ export default function SignupScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry
                 autoComplete="new-password"
+                editable={!isLoading}
               />
             </View>
 
             <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
+              style={[styles.button, isLoading && styles.buttonDisabled]}
               onPress={handleSignup}
-              disabled={loading}
+              disabled={isLoading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
@@ -136,7 +204,7 @@ export default function SignupScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account? </Text>
             <Link href="/(auth)/login" asChild>
-              <TouchableOpacity>
+              <TouchableOpacity disabled={isLoading}>
                 <Text style={styles.link}>Sign In</Text>
               </TouchableOpacity>
             </Link>
@@ -163,7 +231,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   title: {
     fontSize: 28,
@@ -174,6 +242,58 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6b7280',
+  },
+  socialButtons: {
+    gap: 12,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  socialIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4285F4',
+  },
+  socialButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  appleButton: {
+    backgroundColor: '#000',
+    borderColor: '#000',
+  },
+  appleIcon: {
+    fontSize: 18,
+    color: '#fff',
+  },
+  appleButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#d1d5db',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#6b7280',
+    fontSize: 14,
   },
   form: {
     gap: 24,
