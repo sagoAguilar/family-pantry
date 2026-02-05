@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import BarcodeScanner from '../../components/BarcodeScanner';
 import { getCurrentUserFamilyId, supabase } from '../../lib/supabase';
 import { InventoryItem } from '../../lib/types';
 
@@ -18,6 +19,7 @@ export default function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [scannerVisible, setScannerVisible] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -27,6 +29,7 @@ export default function InventoryScreen() {
   const [storeName, setStoreName] = useState('');
   const [category, setCategory] = useState('');
   const [expirationDate, setExpirationDate] = useState('');
+  const [barcode, setBarcode] = useState('');
 
   useEffect(() => {
     fetchInventory();
@@ -83,6 +86,7 @@ export default function InventoryScreen() {
     setStoreName(item.store_name || '');
     setCategory(item.category || '');
     setExpirationDate(item.expiration_date || '');
+    setBarcode(item.barcode || '');
     setModalVisible(true);
   }
 
@@ -94,6 +98,7 @@ export default function InventoryScreen() {
     setStoreName('');
     setCategory('');
     setExpirationDate('');
+    setBarcode('');
   }
 
   async function saveItem() {
@@ -115,6 +120,7 @@ export default function InventoryScreen() {
         store_name: storeName || null,
         category: category || null,
         expiration_date: expirationDate || null,
+        barcode: barcode || null,
       };
 
       if (editingItem) {
@@ -134,6 +140,19 @@ export default function InventoryScreen() {
 
         if (error) throw error;
         Alert.alert('Success', 'Item added to inventory');
+      }
+
+      // Learn new product barcode
+      if (barcode && name) {
+        await supabase.from('product_barcodes').upsert({
+          family_id: familyId,
+          barcode,
+          product_name: name,
+          usual_store: storeName || null,
+          last_price: price ? parseFloat(price) : null,
+          category: category || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'family_id, barcode' });
       }
 
       setModalVisible(false);
@@ -230,6 +249,35 @@ export default function InventoryScreen() {
       Alert.alert('Success', 'Added to shopping list');
     } catch (error: any) {
       Alert.alert('Error', error.message);
+    }
+  }
+
+  async function handleBarcodeScanned(data: string) {
+    setScannerVisible(false);
+    setBarcode(data);
+
+    try {
+      const familyId = await getCurrentUserFamilyId();
+      if (!familyId) return;
+
+      const { data: product } = await supabase
+        .from('product_barcodes')
+        .select('*')
+        .eq('family_id', familyId)
+        .eq('barcode', data)
+        .single();
+
+      if (product) {
+        setName(product.product_name);
+        if (product.usual_store) setStoreName(product.usual_store);
+        if (product.last_price) setPrice(product.last_price.toString());
+        if (product.category) setCategory(product.category);
+        Alert.alert('Product Found', `Filled details for ${product.product_name}`);
+      } else {
+        Alert.alert('New Barcode', 'Barcode added. Please fill in the details to save it for next time.');
+      }
+    } catch (error) {
+      console.log('Error looking up barcode:', error);
     }
   }
 
@@ -337,6 +385,21 @@ export default function InventoryScreen() {
               {editingItem ? 'Edit Item' : 'Add Item'}
             </Text>
 
+            <TouchableOpacity
+              style={styles.scanButton}
+              onPress={() => setScannerVisible(true)}
+            >
+              <Text style={styles.scanButtonText}>📷 Scan Barcode</Text>
+            </TouchableOpacity>
+
+            <TextInput
+              style={[styles.input, styles.barcodeInput]}
+              placeholder="Barcode"
+              value={barcode}
+              onChangeText={setBarcode}
+              editable={true} // Allow manual entry too
+            />
+
             <TextInput
               style={styles.input}
               placeholder="Item Name *"
@@ -407,6 +470,11 @@ export default function InventoryScreen() {
           </View>
         </View>
       </Modal>
+      <BarcodeScanner
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScanned={handleBarcodeScanned}
+      />
     </View>
   );
 }
@@ -589,5 +657,21 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  scanButton: {
+    backgroundColor: '#e0f2fe',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  scanButtonText: {
+    color: '#0284c7',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  barcodeInput: {
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
   },
 });

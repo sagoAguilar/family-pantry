@@ -40,6 +40,12 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow FamilyPantry to access your camera to scan barcodes."
+        }
       ]
     ],
     "experiments": {
