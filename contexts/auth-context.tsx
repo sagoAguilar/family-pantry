@@ -1,17 +1,6 @@
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Session, User } from '@supabase/supabase-js';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Crypto from 'expo-crypto';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
-
-// Configure Google Sign-In
-// You'll need to add your own client IDs from Google Cloud Console
-GoogleSignin.configure({
-  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-});
 
 type AuthContextType = {
   session: Session | null;
@@ -21,9 +10,7 @@ type AuthContextType = {
   needsFamily: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, familyName: string, userName: string) => Promise<{ error: Error | null }>;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
-  signInWithApple: () => Promise<{ error: Error | null }>;
-  createFamilyForSocialUser: (familyName: string, userName: string) => Promise<{ error: Error | null }>;
+  createFamily: (familyName: string, userName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -119,26 +106,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Failed to create user');
 
-      // 2. Create family
-      const { data: familyData, error: familyError } = await supabase
-        .from('families')
-        .insert({ name: familyName })
-        .select()
-        .single();
-      if (familyError) throw familyError;
+      // 2. Create family and link user using RPC
+      // (Wait for session to be established if auto-confirm is on)
+      if (authData.session) {
+        const { data: familyId, error: rpcError } = await supabase
+          .rpc('create_new_family', {
+            family_name: familyName,
+            user_name: userName,
+          });
 
-      // 3. Link user to family
-      const { error: userError } = await supabase.from('users').insert({
-        id: authData.user.id,
-        family_id: familyData.id,
-        name: userName,
-        role: 'admin',
-      });
-      if (userError) throw userError;
+        if (rpcError) throw rpcError;
 
-      // Update local state
-      setFamilyId(familyData.id);
-      setNeedsFamily(false);
+        // Update local state
+        setFamilyId(familyId);
+        setNeedsFamily(false);
+      } else {
+        // If no session (email confirmation required), we can't run the RPC yet.
+        // User will complete profile after login.
+      }
 
       return { error: null };
     } catch (error) {
@@ -146,87 +131,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function signInWithGoogle() {
-    try {
-      await GoogleSignin.hasPlayServices();
-      const signInResult = await GoogleSignin.signIn();
-
-      if (!signInResult.data?.idToken) {
-        throw new Error('No ID token returned from Google');
-      }
-
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
-        token: signInResult.data.idToken,
-      });
-
-      if (error) throw error;
-      return { error: null };
-    } catch (error) {
-      return { error: error as Error };
-    }
-  }
-
-  async function signInWithApple() {
-    try {
-      // Generate a random nonce
-      const rawNonce = Math.random().toString(36).substring(2, 18);
-      const hashedNonce = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        rawNonce
-      );
-
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-        nonce: hashedNonce,
-      });
-
-      if (!credential.identityToken) {
-        throw new Error('No identity token returned from Apple');
-      }
-
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: 'apple',
-        token: credential.identityToken,
-        nonce: rawNonce,
-      });
-
-      if (error) throw error;
-      return { error: null };
-    } catch (error: any) {
-      if (error.code === 'ERR_REQUEST_CANCELED') {
-        return { error: null }; // User cancelled
-      }
-      return { error: error as Error };
-    }
-  }
-
-  async function createFamilyForSocialUser(familyName: string, userName: string) {
+  async function createFamily(familyName: string, userName: string) {
     try {
       if (!user) throw new Error('No user logged in');
 
-      // 1. Create family
-      const { data: familyData, error: familyError } = await supabase
-        .from('families')
-        .insert({ name: familyName })
-        .select()
-        .single();
-      if (familyError) throw familyError;
+      // Call RPC to create family and link user atomically
+      const { data: newFamilyId, error: rpcError } = await supabase
+        .rpc('create_new_family', {
+          family_name: familyName,
+          user_name: userName,
+        });
 
-      // 2. Link user to family
-      const { error: userError } = await supabase.from('users').insert({
-        id: user.id,
-        family_id: familyData.id,
-        name: userName,
-        role: 'admin',
-      });
-      if (userError) throw userError;
+      if (rpcError) throw rpcError;
 
       // Update local state
-      setFamilyId(familyData.id);
+      setFamilyId(newFamilyId);
       setNeedsFamily(false);
 
       return { error: null };
@@ -236,7 +155,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
-    await GoogleSignin.signOut().catch(() => {}); // Ignore if not signed in with Google
     await supabase.auth.signOut();
     setSession(null);
     setUser(null);
@@ -254,9 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         needsFamily,
         signIn,
         signUp,
-        signInWithGoogle,
-        signInWithApple,
-        createFamilyForSocialUser,
+        createFamily,
         signOut,
       }}
     >
@@ -271,9 +187,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
-
-// Helper to check if Apple auth is available
-export function isAppleAuthAvailable() {
-  return Platform.OS === 'ios';
 }

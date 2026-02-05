@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,7 +13,7 @@ import {
 import { useAuth } from '../../contexts/auth-context';
 
 export default function CompleteProfileScreen() {
-  const { user, createFamilyForSocialUser, signOut } = useAuth();
+  const { user, createFamily, signOut } = useAuth();
   const [userName, setUserName] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -26,7 +25,7 @@ export default function CompleteProfileScreen() {
     }
 
     setLoading(true);
-    const { error } = await createFamilyForSocialUser(familyName, userName);
+    const { error } = await createFamily(familyName, userName);
     setLoading(false);
 
     if (error) {

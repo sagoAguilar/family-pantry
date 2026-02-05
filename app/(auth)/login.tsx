@@ -1,4 +1,4 @@
-import { Link, router } from 'expo-router';
+import { Link } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,14 +11,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { isAppleAuthAvailable, useAuth } from '../../contexts/auth-context';
+import { useAuth } from '../../contexts/auth-context';
 
 export default function LoginScreen() {
-  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<'google' | 'apple' | null>(null);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -36,29 +35,7 @@ export default function LoginScreen() {
     // Navigation is handled by auth state change in _layout.tsx
   }
 
-  async function handleGoogleSignIn() {
-    setSocialLoading('google');
-    const { error } = await signInWithGoogle();
-    setSocialLoading(null);
-
-    if (error) {
-      Alert.alert('Error', error.message);
-    }
-    // Navigation is handled by auth state change in _layout.tsx
-  }
-
-  async function handleAppleSignIn() {
-    setSocialLoading('apple');
-    const { error } = await signInWithApple();
-    setSocialLoading(null);
-
-    if (error) {
-      Alert.alert('Error', error.message);
-    }
-    // Navigation is handled by auth state change in _layout.tsx
-  }
-
-  const isLoading = loading || socialLoading !== null;
+  const isLoading = loading;
 
   return (
     <KeyboardAvoidingView
@@ -104,46 +81,6 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>Sign In</Text>
             )}
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or continue with</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <View style={styles.socialButtons}>
-          <TouchableOpacity
-            style={[styles.socialButton, isLoading && styles.buttonDisabled]}
-            onPress={handleGoogleSignIn}
-            disabled={isLoading}
-          >
-            {socialLoading === 'google' ? (
-              <ActivityIndicator color="#374151" />
-            ) : (
-              <>
-                <Text style={styles.socialIcon}>G</Text>
-                <Text style={styles.socialButtonText}>Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {isAppleAuthAvailable() && (
-            <TouchableOpacity
-              style={[styles.socialButton, styles.appleButton, isLoading && styles.buttonDisabled]}
-              onPress={handleAppleSignIn}
-              disabled={isLoading}
-            >
-              {socialLoading === 'apple' ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Text style={styles.appleIcon}></Text>
-                  <Text style={styles.appleButtonText}>Apple</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={styles.footer}>
@@ -223,43 +160,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     color: '#6b7280',
     fontSize: 14,
-  },
-  socialButtons: {
-    gap: 12,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  socialIcon: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4285F4',
-  },
-  socialButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  appleButton: {
-    backgroundColor: '#000',
-    borderColor: '#000',
-  },
-  appleIcon: {
-    fontSize: 18,
-    color: '#fff',
-  },
-  appleButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
   },
   footer: {
     flexDirection: 'row',
