@@ -5,14 +5,9 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '../../contexts/auth-context';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { session, familyId } = useAuth();
-
-  // Only show Inventory and Shopping tabs if user is logged in with a family
-  const isFullyAuthenticated = session && familyId;
 
   return (
     <Tabs
@@ -24,8 +19,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Scanner',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="barcode.viewfinder" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -33,7 +28,6 @@ export default function TabLayout() {
         options={{
           title: 'Inventory',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="shippingbox.fill" color={color} />,
-          href: isFullyAuthenticated ? undefined : null, // Hide if not authenticated
         }}
       />
       <Tabs.Screen
@@ -41,20 +35,6 @@ export default function TabLayout() {
         options={{
           title: 'Shopping',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="cart.fill" color={color} />,
-          href: isFullyAuthenticated ? undefined : null, // Hide if not authenticated
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

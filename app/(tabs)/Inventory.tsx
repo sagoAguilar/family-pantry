@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import BarcodeScanner from '../../components/BarcodeScanner';
-import { getCurrentUserFamilyId, supabase } from '../../lib/supabase';
+import { ANON_FAMILY_ID, supabase } from '../../lib/supabase';
 import { InventoryItem } from '../../lib/types';
 
 export default function InventoryScreen() {
@@ -50,16 +50,10 @@ export default function InventoryScreen() {
 
   async function fetchInventory() {
     try {
-      const familyId = await getCurrentUserFamilyId();
-      if (!familyId) {
-        Alert.alert('Error', 'No family found');
-        return;
-      }
-
       const { data, error } = await supabase
         .from('inventory_items')
         .select('*')
-        .eq('family_id', familyId)
+        .eq('family_id', ANON_FAMILY_ID)
         .order('name', { ascending: true });
 
       if (error) throw error;
@@ -108,11 +102,8 @@ export default function InventoryScreen() {
         return;
       }
 
-      const familyId = await getCurrentUserFamilyId();
-      if (!familyId) throw new Error('No family found');
-
       const itemData = {
-        family_id: familyId,
+        family_id: ANON_FAMILY_ID,
         name,
         quantity: parseFloat(quantity),
         unit,
@@ -145,7 +136,7 @@ export default function InventoryScreen() {
       // Learn new product barcode
       if (barcode && name) {
         await supabase.from('product_barcodes').upsert({
-          family_id: familyId,
+          family_id: ANON_FAMILY_ID,
           barcode,
           product_name: name,
           usual_store: storeName || null,
@@ -225,23 +216,16 @@ export default function InventoryScreen() {
 
   async function addToShoppingList(item: InventoryItem) {
     try {
-      const familyId = await getCurrentUserFamilyId();
-      if (!familyId) throw new Error('No family found');
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
       const neededQuantity = item.max_quantity - item.quantity;
 
       const { error } = await supabase
         .from('shopping_list_items')
         .insert({
-          family_id: familyId,
+          family_id: ANON_FAMILY_ID,
           name: item.name,
           quantity: neededQuantity,
           unit: item.unit,
           preferred_store: item.store_name,
-          added_by: user.id,
           notes: 'Auto-added: low stock',
         });
 
@@ -257,13 +241,10 @@ export default function InventoryScreen() {
     setBarcode(data);
 
     try {
-      const familyId = await getCurrentUserFamilyId();
-      if (!familyId) return;
-
       const { data: product } = await supabase
         .from('product_barcodes')
         .select('*')
-        .eq('family_id', familyId)
+        .eq('family_id', ANON_FAMILY_ID)
         .eq('barcode', data)
         .single();
 

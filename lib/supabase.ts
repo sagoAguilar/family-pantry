@@ -15,20 +15,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export async function getCurrentUserFamilyId() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const { data, error } = await (supabase as any)
-    .from("users")
-    .select("family_id")
-    .eq("id", user.id)
-    .single();
-
-  if (error || !data) return null;
-
-  return data.family_id;
-}
+// Shared anonymous family ID for MVP (no auth required).
+// Run supabase/mvp_anon_migration.sql in Supabase to create this family
+// and open RLS policies for the anon key.
+export const ANON_FAMILY_ID = '00000000-0000-0000-0000-000000000001';
