@@ -131,6 +131,50 @@ export default function ShoppingListScreen() {
     }
   }
 
+  async function moveItemToInventory(item: ShoppingListItem) {
+    try {
+      const { data: existing } = await supabase
+        .from('inventory_items')
+        .select('*')
+        .eq('family_id', ANON_FAMILY_ID)
+        .eq('name', item.name)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('inventory_items')
+          .update({
+            quantity: existing.quantity + item.quantity,
+            store_name: item.preferred_store || existing.store_name,
+          })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('inventory_items')
+          .insert({
+            family_id: ANON_FAMILY_ID,
+            name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            max_quantity: item.quantity,
+            store_name: item.preferred_store || null,
+          });
+        if (error) throw error;
+      }
+
+      const { error: deleteError } = await supabase
+        .from('shopping_list_items')
+        .delete()
+        .eq('id', item.id);
+      if (deleteError) throw deleteError;
+
+      fetchShoppingList();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  }
+
   async function clearCheckedItems() {
     Alert.alert(
       'Clear Checked Items',
@@ -266,6 +310,13 @@ export default function ShoppingListScreen() {
             <Text style={styles.itemNotes}>{item.notes}</Text>
           )}
         </View>
+
+        <TouchableOpacity
+          style={styles.moveInvButton}
+          onPress={() => moveItemToInventory(item)}
+        >
+          <Text style={styles.moveInvButtonText}>→ Inv</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.deleteButton}
@@ -519,6 +570,19 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 2,
     fontStyle: 'italic',
+  },
+  moveInvButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#d1fae5',
+    marginRight: 4,
+    justifyContent: 'center',
+  },
+  moveInvButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065f46',
   },
   deleteButton: {
     padding: 8,

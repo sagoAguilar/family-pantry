@@ -236,6 +236,30 @@ export default function InventoryScreen() {
     }
   }
 
+  async function moveToShoppingList(item: InventoryItem) {
+    try {
+      const { error } = await supabase.from('shopping_list_items').insert({
+        family_id: ANON_FAMILY_ID,
+        name: item.name,
+        quantity: item.quantity,
+        unit: item.unit,
+        preferred_store: item.store_name || null,
+      });
+      if (error) throw error;
+
+      const { error: delErr } = await supabase
+        .from('inventory_items')
+        .delete()
+        .eq('id', item.id);
+      if (delErr) throw delErr;
+
+      fetchInventory();
+      Alert.alert('Moved', `${item.name} moved to Shopping List`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  }
+
   async function handleBarcodeScanned(data: string) {
     setScannerVisible(false);
     setBarcode(data);
@@ -322,6 +346,13 @@ export default function InventoryScreen() {
             onPress={() => adjustQuantity(item, 1)}
           >
             <Text style={styles.adjustButtonText}>+1</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.moveListButton}
+            onPress={() => moveToShoppingList(item)}
+          >
+            <Text style={styles.moveListButtonText}>→ List</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -562,6 +593,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
   },
+  moveListButton: {
+    flex: 1,
+    backgroundColor: '#dbeafe',
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  moveListButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1d4ed8',
+  },
   deleteButton: {
     flex: 1,
     backgroundColor: '#fee2e2',
@@ -570,7 +613,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deleteButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#dc2626',
   },

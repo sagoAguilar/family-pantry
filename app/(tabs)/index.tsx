@@ -3,12 +3,14 @@ import React, { useState } from 'react';
 import {
   Alert,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import BarcodeScanner from '../../components/BarcodeScanner';
 import { ANON_FAMILY_ID, supabase } from '../../lib/supabase';
 
@@ -27,6 +29,19 @@ export default function ScannerScreen() {
   const [newQty, setNewQty] = useState('1');
   const [newUnit, setNewUnit] = useState('units');
   const [newBarcode, setNewBarcode] = useState('');
+  const [newStore, setNewStore] = useState('');
+  const [newLocation, setNewLocation] = useState('');
+  const [newDestination, setNewDestination] = useState<'inventory' | 'shopping_list'>('inventory');
+
+  function resetAddForm() {
+    setNewName('');
+    setNewQty('1');
+    setNewUnit('units');
+    setNewBarcode('');
+    setNewStore('');
+    setNewLocation('');
+    setNewDestination('inventory');
+  }
 
   async function handleBarcodeScanned(scannedBarcode: string) {
     setScannerVisible(false);
@@ -73,10 +88,9 @@ export default function ScannerScreen() {
       }
 
       // 3. Open add-item modal pre-filled with whatever we know
+      resetAddForm();
       setNewBarcode(isBarcode ? input : '');
       setNewName(knownName || (!isBarcode ? input : ''));
-      setNewQty('1');
-      setNewUnit('units');
       setAddModalVisible(true);
     } catch (error: any) {
       Alert.alert('Error', error.message);
@@ -89,18 +103,62 @@ export default function ScannerScreen() {
       return;
     }
     try {
-      const { error } = await supabase.from('inventory_items').insert({
-        family_id: ANON_FAMILY_ID,
-        name: newName,
-        quantity: parseFloat(newQty),
-        unit: newUnit,
-        max_quantity: parseFloat(newQty),
-        barcode: newBarcode || null,
-      });
-      if (error) throw error;
+      if (newDestination === 'inventory') {
+        const { error } = await supabase.from('inventory_items').insert({
+          family_id: ANON_FAMILY_ID,
+          name: newName,
+          quantity: parseFloat(newQty),
+          unit: newUnit,
+          max_quantity: parseFloat(newQty),
+          barcode: newBarcode || null,
+          store_name: newStore || null,
+          location: newLocation || null,
+        });
+        if (error) throw error;
+
+        // Remember barcode → product name association
+        if (newBarcode) {
+          await supabase.from('product_barcodes').upsert({
+            family_id: ANON_FAMILY_ID,
+            barcode: newBarcode,
+            product_name: newName,
+            usual_store: newStore || null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'family_id,barcode' });
+        }
+      } else {
+        const { error } = await supabase.from('shopping_list_items').insert({
+          family_id: ANON_FAMILY_ID,
+          name: newName,
+          quantity: parseFloat(newQty),
+          unit: newUnit,
+          preferred_store: newStore || null,
+        });
+        if (error) throw error;
+      }
+
+      const savedName = newName;
+      const destination = newDestination;
       setAddModalVisible(false);
+      resetAddForm();
       setManualInput('');
-      Alert.alert('Added', `${newName} added to inventory`);
+
+      const destinationLabel = destination === 'inventory' ? 'Inventory' : 'Shopping List';
+      const destinationRoute = destination === 'inventory'
+        ? '/(tabs)/Inventory'
+        : '/(tabs)/shopping-list';
+
+      Alert.alert(
+        'Saved!',
+        `${savedName} added to ${destinationLabel}.`,
+        [
+          { text: '📷 Scan Another' },
+          {
+            text: `Go to ${destinationLabel}`,
+            onPress: () => router.navigate(destinationRoute as any),
+          },
+        ]
+      );
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -114,9 +172,23 @@ export default function ScannerScreen() {
         .update({ quantity: foundItemQty })
         .eq('id', foundItem.id);
       if (error) throw error;
+
+      const itemName = foundItem.name;
       setFoundModalVisible(false);
       setFoundItem(null);
       setManualInput('');
+
+      Alert.alert(
+        'Updated!',
+        `${itemName} quantity updated.`,
+        [
+          { text: '📷 Scan Another' },
+          {
+            text: 'Go to Inventory',
+            onPress: () => router.navigate('/(tabs)/Inventory' as any),
+          },
+        ]
+      );
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -175,6 +247,19 @@ export default function ScannerScreen() {
             <Text style={styles.modalTitle}>{foundItem?.name}</Text>
             <Text style={styles.modalSubtitle}>Already in inventory</Text>
 
+            {foundItem?.store_name && (
+              <Text style={styles.infoRow}>Store: {foundItem.store_name}</Text>
+            )}
+            {foundItem?.location && (
+              <Text style={styles.infoRow}>Aisle: {foundItem.location}</Text>
+            )}
+            {foundItem?.category && (
+              <Text style={styles.infoRow}>Category: {foundItem.category}</Text>
+            )}
+            {foundItem?.price != null && (
+              <Text style={styles.infoRow}>Price: ${foundItem.price.toFixed(2)}</Text>
+            )}
+
             <View style={styles.qtyRow}>
               <TouchableOpacity
                 style={styles.qtyButton}
@@ -215,37 +300,75 @@ export default function ScannerScreen() {
       <Modal visible={addModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add to Inventory</Text>
+            <Text style={styles.modalTitle}>
+              Add to {newDestination === 'inventory' ? 'Inventory' : 'Shopping List'}
+            </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Item Name *"
-              value={newName}
-              onChangeText={setNewName}
-            />
-            <View style={styles.row}>
+            <ScrollView keyboardShouldPersistTaps="handled">
               <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Quantity *"
-                value={newQty}
-                onChangeText={setNewQty}
-                keyboardType="decimal-pad"
+                style={styles.input}
+                placeholder="Item Name *"
+                value={newName}
+                onChangeText={setNewName}
+              />
+              <View style={styles.row}>
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  placeholder="Quantity *"
+                  value={newQty}
+                  onChangeText={setNewQty}
+                  keyboardType="decimal-pad"
+                />
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  placeholder="Unit"
+                  value={newUnit}
+                  onChangeText={setNewUnit}
+                />
+              </View>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Retailer / Store"
+                value={newStore}
+                onChangeText={setNewStore}
               />
               <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Unit"
-                value={newUnit}
-                onChangeText={setNewUnit}
+                style={styles.input}
+                placeholder="Aisle / Location"
+                value={newLocation}
+                onChangeText={setNewLocation}
               />
-            </View>
-            {newBarcode ? (
-              <Text style={styles.barcodeLabel}>Barcode: {newBarcode}</Text>
-            ) : null}
+
+              {/* Destination toggle */}
+              <View style={styles.destinationRow}>
+                <TouchableOpacity
+                  style={[styles.destButton, newDestination === 'inventory' && styles.destButtonActive]}
+                  onPress={() => setNewDestination('inventory')}
+                >
+                  <Text style={[styles.destButtonText, newDestination === 'inventory' && styles.destButtonTextActive]}>
+                    📦 Inventory
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.destButton, newDestination === 'shopping_list' && styles.destButtonActive]}
+                  onPress={() => setNewDestination('shopping_list')}
+                >
+                  <Text style={[styles.destButtonText, newDestination === 'shopping_list' && styles.destButtonTextActive]}>
+                    🛒 Shopping List
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {newBarcode ? (
+                <Text style={styles.barcodeLabel}>Barcode: {newBarcode}</Text>
+              ) : null}
+            </ScrollView>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setAddModalVisible(false)}
+                onPress={() => { setAddModalVisible(false); resetAddForm(); }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -358,6 +481,7 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '90%',
     maxWidth: 400,
+    maxHeight: '85%',
   },
   modalTitle: {
     fontSize: 20,
@@ -368,13 +492,19 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: 14,
     color: '#6b7280',
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  infoRow: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 4,
   },
   qtyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 24,
+    marginTop: 12,
     marginBottom: 24,
   },
   qtyButton: {
@@ -409,6 +539,32 @@ const styles = StyleSheet.create({
   },
   halfInput: {
     flex: 1,
+  },
+  destinationRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  destButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+  },
+  destButtonActive: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  destButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  destButtonTextActive: {
+    color: '#fff',
   },
   barcodeLabel: {
     fontSize: 13,
