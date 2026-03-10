@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getCurrentUserFamilyId, supabase } from '../../lib/supabase';
+import { ANON_FAMILY_ID, supabase } from '../../lib/supabase';
 import { ShoppingListItem } from '../../lib/types';
 
 export default function ShoppingListScreen() {
@@ -45,16 +45,10 @@ export default function ShoppingListScreen() {
 
   async function fetchShoppingList() {
     try {
-      const familyId = await getCurrentUserFamilyId();
-      if (!familyId) {
-        Alert.alert('Error', 'No family found');
-        return;
-      }
-
       const { data, error } = await supabase
         .from('shopping_list_items')
         .select('*')
-        .eq('family_id', familyId)
+        .eq('family_id', ANON_FAMILY_ID)
         .order('is_checked', { ascending: true })
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
@@ -88,22 +82,15 @@ export default function ShoppingListScreen() {
         return;
       }
 
-      const familyId = await getCurrentUserFamilyId();
-      if (!familyId) throw new Error('No family found');
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
       const { error } = await supabase
         .from('shopping_list_items')
         .insert({
-          family_id: familyId,
+          family_id: ANON_FAMILY_ID,
           name,
           quantity: parseFloat(quantity),
           unit,
           preferred_store: preferredStore || null,
           notes: notes || null,
-          added_by: user.id,
         });
 
       if (error) throw error;
@@ -155,13 +142,10 @@ export default function ShoppingListScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const familyId = await getCurrentUserFamilyId();
-              if (!familyId) throw new Error('No family found');
-
               const { error } = await supabase
                 .from('shopping_list_items')
                 .delete()
-                .eq('family_id', familyId)
+                .eq('family_id', ANON_FAMILY_ID)
                 .eq('is_checked', true);
 
               if (error) throw error;
@@ -185,9 +169,6 @@ export default function ShoppingListScreen() {
           text: 'Move',
           onPress: async () => {
             try {
-              const familyId = await getCurrentUserFamilyId();
-              if (!familyId) throw new Error('No family found');
-
               const checkedItems = items.filter(item => item.is_checked);
 
               for (const item of checkedItems) {
@@ -195,7 +176,7 @@ export default function ShoppingListScreen() {
                 const { data: existing } = await supabase
                   .from('inventory_items')
                   .select('*')
-                  .eq('family_id', familyId)
+                  .eq('family_id', ANON_FAMILY_ID)
                   .eq('name', item.name)
                   .single();
 
@@ -213,7 +194,7 @@ export default function ShoppingListScreen() {
                   await supabase
                     .from('inventory_items')
                     .insert({
-                      family_id: familyId,
+                      family_id: ANON_FAMILY_ID,
                       name: item.name,
                       quantity: item.quantity,
                       unit: item.unit,
