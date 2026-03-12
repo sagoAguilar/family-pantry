@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,21 +13,31 @@ import {
 import BarcodeScanner from '../../components/BarcodeScanner';
 import { ANON_FAMILY_ID, supabase } from '../../lib/supabase';
 
+type Destination = 'pantry' | 'shopping';
+
 export default function ScannerScreen() {
   const [scannerVisible, setScannerVisible] = useState(false);
   const [manualInput, setManualInput] = useState('');
+
+  // Step 1: Choose destination (shown when item is NOT in either list)
+  const [destinationModalVisible, setDestinationModalVisible] = useState(false);
+  const [pendingBarcode, setPendingBarcode] = useState('');
+  const [pendingName, setPendingName] = useState('');
+
+  // Step 2: Add-item form (shown after destination is chosen)
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [destination, setDestination] = useState<Destination>('pantry');
+  const [newName, setNewName] = useState('');
+  const [newQty, setNewQty] = useState('1');
+  const [newUnit, setNewUnit] = useState('units');
+  const [newBarcode, setNewBarcode] = useState('');
+  const [newStore, setNewStore] = useState('');
+  const [newLocation, setNewLocation] = useState('');
 
   // Quick-adjust modal: shown when item is found in inventory
   const [foundItem, setFoundItem] = useState<any>(null);
   const [foundItemQty, setFoundItemQty] = useState(0);
   const [foundModalVisible, setFoundModalVisible] = useState(false);
-
-  // Add-item modal: shown when item is NOT in inventory
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newQty, setNewQty] = useState('1');
-  const [newUnit, setNewUnit] = useState('units');
-  const [newBarcode, setNewBarcode] = useState('');
 
   async function handleBarcodeScanned(scannedBarcode: string) {
     setScannerVisible(false);
@@ -43,15 +54,15 @@ export default function ScannerScreen() {
     try {
       const isBarcode = /^\d+$/.test(input);
 
-      // 1. Search inventory by barcode (if numeric) or by name
-      const query = supabase
+      // 1. Search inventory by barcode or name
+      const invQuery = supabase
         .from('inventory_items')
         .select('*')
         .eq('family_id', ANON_FAMILY_ID);
 
       const { data: inventoryMatch } = isBarcode
-        ? await query.eq('barcode', input).maybeSingle()
-        : await query.ilike('name', `%${input}%`).limit(1).maybeSingle();
+        ? await invQuery.eq('barcode', input).maybeSingle()
+        : await invQuery.ilike('name', `%${input}%`).limit(1).maybeSingle();
 
       if (inventoryMatch) {
         setFoundItem(inventoryMatch);
@@ -60,7 +71,7 @@ export default function ScannerScreen() {
         return;
       }
 
-      // 2. Not in inventory — check product_barcodes for a known name
+      // 2. Check product_barcodes for a known name
       let knownName = '';
       if (isBarcode) {
         const { data: knownProduct } = await supabase
@@ -72,15 +83,27 @@ export default function ScannerScreen() {
         if (knownProduct) knownName = knownProduct.product_name;
       }
 
-      // 3. Open add-item modal pre-filled with whatever we know
-      setNewBarcode(isBarcode ? input : '');
-      setNewName(knownName || (!isBarcode ? input : ''));
-      setNewQty('1');
-      setNewUnit('units');
-      setAddModalVisible(true);
+      // 3. Ask user where to add the item
+      const resolvedBarcode = isBarcode ? input : '';
+      const resolvedName = knownName || (!isBarcode ? input : '');
+      setPendingBarcode(resolvedBarcode);
+      setPendingName(resolvedName);
+      setDestinationModalVisible(true);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
+  }
+
+  function chooseDestination(dest: Destination) {
+    setDestinationModalVisible(false);
+    setDestination(dest);
+    setNewBarcode(pendingBarcode);
+    setNewName(pendingName);
+    setNewQty('1');
+    setNewUnit('units');
+    setNewStore('');
+    setNewLocation('');
+    setAddModalVisible(true);
   }
 
   async function saveNewItem() {
@@ -89,18 +112,43 @@ export default function ScannerScreen() {
       return;
     }
     try {
-      const { error } = await supabase.from('inventory_items').insert({
-        family_id: ANON_FAMILY_ID,
-        name: newName,
-        quantity: parseFloat(newQty),
-        unit: newUnit,
-        max_quantity: parseFloat(newQty),
-        barcode: newBarcode || null,
-      });
-      if (error) throw error;
+      if (destination === 'pantry') {
+        const { error } = await supabase.from('inventory_items').insert({
+          family_id: ANON_FAMILY_ID,
+          name: newName,
+          quantity: parseFloat(newQty),
+          unit: newUnit,
+          max_quantity: parseFloat(newQty),
+          barcode: newBarcode || null,
+          location: newLocation || null,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('shopping_list_items').insert({
+          family_id: ANON_FAMILY_ID,
+          name: newName,
+          quantity: parseFloat(newQty),
+          unit: newUnit,
+          preferred_store: newStore || null,
+        });
+        if (error) throw error;
+      }
+
+      // Remember the barcode for next time
+      if (newBarcode && newName) {
+        await supabase.from('product_barcodes').upsert({
+          family_id: ANON_FAMILY_ID,
+          barcode: newBarcode,
+          product_name: newName,
+          usual_store: newStore || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'family_id, barcode' });
+      }
+
       setAddModalVisible(false);
       setManualInput('');
-      Alert.alert('Added', `${newName} added to inventory`);
+      const listName = destination === 'pantry' ? 'Pantry' : 'Shopping List';
+      Alert.alert('Added', `${newName} added to ${listName}`);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -168,12 +216,125 @@ export default function ScannerScreen() {
         onScanned={handleBarcodeScanned}
       />
 
+      {/* Step 1: Choose destination */}
+      <Modal visible={destinationModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Where should this go?</Text>
+            {pendingName ? (
+              <Text style={styles.modalSubtitle}>{pendingName}</Text>
+            ) : pendingBarcode ? (
+              <Text style={styles.modalSubtitle}>Barcode: {pendingBarcode}</Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.destButton}
+              onPress={() => chooseDestination('pantry')}
+            >
+              <Text style={styles.destIcon}>🥫</Text>
+              <View style={styles.destTextBlock}>
+                <Text style={styles.destTitle}>Pantry</Text>
+                <Text style={styles.destDesc}>I already have this at home</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.destButton, styles.destButtonShopping]}
+              onPress={() => chooseDestination('shopping')}
+            >
+              <Text style={styles.destIcon}>🛒</Text>
+              <View style={styles.destTextBlock}>
+                <Text style={styles.destTitle}>Shopping List</Text>
+                <Text style={styles.destDesc}>I need to buy this</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelLink}
+              onPress={() => setDestinationModalVisible(false)}
+            >
+              <Text style={styles.cancelLinkText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Step 2: Fill in item details */}
+      <Modal visible={addModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {destination === 'pantry' ? '🥫 Add to Pantry' : '🛒 Add to Shopping List'}
+              </Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Item Name *"
+                value={newName}
+                onChangeText={setNewName}
+              />
+              <View style={styles.row}>
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  placeholder="Quantity *"
+                  value={newQty}
+                  onChangeText={setNewQty}
+                  keyboardType="decimal-pad"
+                />
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  placeholder="Unit"
+                  value={newUnit}
+                  onChangeText={setNewUnit}
+                />
+              </View>
+
+              {destination === 'shopping' ? (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Retailer / Store"
+                  value={newStore}
+                  onChangeText={setNewStore}
+                />
+              ) : (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Location / Aisle (optional)"
+                  value={newLocation}
+                  onChangeText={setNewLocation}
+                />
+              )}
+
+              {newBarcode ? (
+                <Text style={styles.barcodeLabel}>Barcode: {newBarcode}</Text>
+              ) : null}
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setAddModalVisible(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={saveNewItem}
+                >
+                  <Text style={styles.saveButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Found in inventory: quick quantity adjust */}
       <Modal visible={foundModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{foundItem?.name}</Text>
-            <Text style={styles.modalSubtitle}>Already in inventory</Text>
+            <Text style={styles.modalSubtitle}>Already in pantry</Text>
 
             <View style={styles.qtyRow}>
               <TouchableOpacity
@@ -205,55 +366,6 @@ export default function ScannerScreen() {
                 onPress={applyQuantityChange}
               >
                 <Text style={styles.saveButtonText}>Update</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Not in inventory: add new item */}
-      <Modal visible={addModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add to Inventory</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Item Name *"
-              value={newName}
-              onChangeText={setNewName}
-            />
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Quantity *"
-                value={newQty}
-                onChangeText={setNewQty}
-                keyboardType="decimal-pad"
-              />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Unit"
-                value={newUnit}
-                onChangeText={setNewUnit}
-              />
-            </View>
-            {newBarcode ? (
-              <Text style={styles.barcodeLabel}>Barcode: {newBarcode}</Text>
-            ) : null}
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setAddModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={saveNewItem}
-              >
-                <Text style={styles.saveButtonText}>Add</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -352,6 +464,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
   modalContent: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -369,6 +487,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginBottom: 20,
+  },
+  destButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    gap: 14,
+  },
+  destButtonShopping: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
+  destIcon: {
+    fontSize: 32,
+  },
+  destTextBlock: {
+    flex: 1,
+  },
+  destTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  destDesc: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  cancelLink: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  cancelLinkText: {
+    color: '#6b7280',
+    fontSize: 15,
   },
   qtyRow: {
     flexDirection: 'row',
